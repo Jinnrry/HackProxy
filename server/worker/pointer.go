@@ -62,7 +62,7 @@ func NewPointer(conn *websocket.Conn) {
 		// 生成pointer id
 		instace.PointerID = PointerPoolInstance.GenPointerID()
 		// 写回pointid
-		err := instace.Write(dp.NewPackage(dp.DirectionS2P, dp.TypeAuth, instace.PointerID, 0, 0, []byte{}))
+		err := instace.Write(dp.NewPackage(dp.DirectionS2P, dp.TypeAuth, instace.PointerID, 0, 0, 0, []byte{}))
 		if err != nil {
 			log.Error("写回pointer id失败", err)
 			return
@@ -85,17 +85,66 @@ func (p *Pointer) Close() {
 	p.Enabled = false
 	_ = p.WebSocketConn.Close()
 	PointerPoolInstance.Pool.Delete(p.PointerID)
+	for i, info := range PointerPoolInstance.PointerList {
+		if info.ID == p.PointerID {
+			PointerPoolInstance.PointerList = append(PointerPoolInstance.PointerList[:i], PointerPoolInstance.PointerList[i+1:]...)
+			break
+		}
+	}
+
+	// 向所有client推送pointer信息
+	ClientPoolInstance.Pool.Range(func(key, value any) bool {
+		go func() {
+			err := value.(*Client).PushPointerInfo()
+			if err != nil {
+				log.Error("推送pointer信息失败，断开连接", err)
+				value.(*Client).Close()
+			}
+
+		}()
+		return true
+	})
 }
 
 func (p *Pointer) StartRead() {
 	for {
-		_, data, err := p.WebSocketConn.ReadMessage()
-		if err != nil {
-			log.Error("读取客户端数据失败,关闭连接", err)
-			p.Close()
-			return
+		if p.Enabled {
+			pg, err := dp.ReadPkg(p.WebSocketConn)
+			if err != nil {
+				log.Error("读取客户端数据失败,关闭连接", err)
+				p.Close()
+				return
+			}
+			if pg.Direction == dp.DirectionP2C {
+				c, ok := ClientPoolInstance.Get(pg.ClientID)
+				if !ok {
+					pg.Type = dp.TypeProxyFail
+					err := p.Write(pg)
+					if err != nil {
+						p.Close()
+					}
+				}
+				err := c.Write(pg)
+				if err != nil {
+					c.Close()
+					pg.Type = dp.TypeProxyFail
+					err := p.Write(pg)
+					if err != nil {
+						p.Close()
+					}
+				}
+			} else if pg.Direction == dp.DirectionP2CNoReplay {
+				c, ok := ClientPoolInstance.Get(pg.ClientID)
+				if ok {
+					err := c.Write(pg)
+					if err != nil {
+						c.Close()
+
+					}
+				}
+
+			}
 		}
-		_ = data
-		//todo
+
 	}
 }

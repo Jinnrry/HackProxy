@@ -5,6 +5,7 @@ import (
 	"HackProxy/config"
 	"HackProxy/utils/dp"
 	"HackProxy/utils/log"
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	"sync"
 	"time"
@@ -64,7 +65,7 @@ func NewClient(conn *websocket.Conn) {
 		// 生成client id
 		instace.ClientID = ClientPoolInstance.GenClientID()
 		// 写回id
-		err := instace.Write(dp.NewPackage(dp.DirectionS2C, dp.TypeAuth, 0, instace.ClientID, 0, []byte{}))
+		err := instace.Write(dp.NewPackage(dp.DirectionS2C, dp.TypeAuth, 0, instace.ClientID, 0, 0, []byte{}))
 		if err != nil {
 			log.Error("写回pointer id失败", err)
 			return
@@ -72,6 +73,13 @@ func NewClient(conn *websocket.Conn) {
 		instace.Enabled = true
 		// 插入pointer pool
 		ClientPoolInstance.Insert(instace)
+		// 推送pointer信息
+		err = instace.PushPointerInfo()
+		if err != nil {
+			instace.Close()
+			return
+		}
+
 		// 启一个协程读取数据
 		go instace.StartRead()
 	}
@@ -85,6 +93,13 @@ func (p *Client) Write(pg *dp.Package) error {
 	return p.WebSocketConn.WriteMessage(websocket.BinaryMessage, pg.Encode())
 }
 
+func (p *Client) PushPointerInfo() error {
+	infoList := PointerPoolInstance.GetPointerList()
+	byteData, _ := json.Marshal(infoList)
+	pg := dp.NewPackage(dp.DirectionS2C, dp.TypePointerInfo, 0, p.ClientID, 0, 0, byteData)
+	return p.Write(pg)
+}
+
 func (p *Client) Close() {
 	p.Enabled = false
 	_ = p.WebSocketConn.Close()
@@ -93,15 +108,46 @@ func (p *Client) Close() {
 
 func (p *Client) StartRead() {
 	for {
-		pg, err := dp.ReadPkg(p.WebSocketConn)
-		if err != nil {
-			log.Error("客户端读取错误", err)
-			log.Error("client id:", p.ClientID, "断开连接")
-			p.Close()
-			return
+		if p.Enabled {
+			pg, err := dp.ReadPkg(p.WebSocketConn)
+			if err != nil {
+				log.Error("客户端读取错误", err)
+				log.Error("client id:", p.ClientID, "断开连接")
+				p.Close()
+				return
+			}
+
+			if pg.Direction == dp.DirectionC2P {
+				pointer, ok := PointerPoolInstance.Get(pg.PointerID)
+				if !ok {
+					pg.Type = dp.TypeProxyFail
+					pg.Direction = dp.DirectionS2C
+					err := p.Write(pg)
+					if err != nil {
+						p.Close()
+					}
+				} else {
+					err := pointer.Write(pg)
+					if err != nil {
+						pointer.Close()
+						pg.Type = dp.TypeProxyFail
+						pg.Direction = dp.DirectionS2C
+						err := p.Write(pg)
+						if err != nil {
+							p.Close()
+						}
+					}
+				}
+			} else if pg.Direction == dp.DirectionC2PNoReplay {
+				pointer, ok := PointerPoolInstance.Get(pg.PointerID)
+				if ok {
+					err := pointer.Write(pg)
+					if err != nil {
+						pointer.Close()
+					}
+				}
+
+			}
 		}
-
-		log.Debug("接收到来着client的数据包：", pg)
-
 	}
 }

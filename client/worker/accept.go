@@ -3,21 +3,23 @@ package worker
 import (
 	"HackProxy/config"
 	"HackProxy/utils/dp"
+	"HackProxy/utils/dto"
 	"HackProxy/utils/log"
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	"net/url"
+	"sync"
 )
 
 type Accept struct {
-	conn     *websocket.Conn
-	ClientID uint32
+	conn            *websocket.Conn
+	ClientID        uint32
+	PointerInfoList []*dto.PointerInfo
+	PickPointer     *dto.PointerInfo
+	Lock            sync.Mutex
 }
 
-var AcceptIntance *Accept
-
-func init() {
-	AcceptIntance = &Accept{}
-}
+var AcceptInstance *Accept
 
 func (a *Accept) Start() {
 	// 和server节点建立连接
@@ -30,7 +32,7 @@ func (a *Accept) Start() {
 		return
 	}
 	// 写入权鉴数据
-	authPkg := dp.NewPackage(dp.DirectionC2S, dp.TypeAuth, 0, 0, 0, []byte(config.Client2ServerAuth))
+	authPkg := dp.NewPackage(dp.DirectionC2S, dp.TypeAuth, 0, 0, 0, 0, []byte(config.Client2ServerAuth))
 	err = c.WriteMessage(websocket.BinaryMessage, authPkg.Encode())
 	if err != nil {
 		log.Fatal("发送权鉴包失败", err)
@@ -41,6 +43,7 @@ func (a *Accept) Start() {
 	pg, err := dp.ReadPkg(c)
 	if err != nil {
 		log.Fatal("读取权鉴响应包失败", err)
+		return
 	}
 	if pg.Direction == dp.DirectionS2C && pg.Type == dp.TypeAuth {
 		a.ClientID = pg.ClientID
@@ -53,8 +56,10 @@ func (a *Accept) Start() {
 	a.StartRead()
 }
 
-func (a *Accept) Write() {
-
+func (a *Accept) Write(pg *dp.Package) error {
+	a.Lock.Lock()
+	defer a.Lock.Unlock()
+	return a.conn.WriteMessage(websocket.BinaryMessage, pg.Encode())
 }
 
 func (a *Accept) StartRead() {
@@ -64,6 +69,78 @@ func (a *Accept) StartRead() {
 			log.Error("读取server数据失败", err)
 			return
 		}
-		log.Debug("收到服务端数据", pg)
+		switch pg.Type {
+		case dp.TypePointerInfo:
+			_ = json.Unmarshal(pg.Data, &a.PointerInfoList)
+		case dp.TypeCreateConnSucc:
+			proxy, ok := ProxyPoolInstance.Get(pg.ProxyID)
+			if !ok {
+				pg.Type = dp.TypeCloseConn
+				pg.Direction = dp.DirectionC2PNoReplay
+				err := a.Write(pg)
+				if err != nil {
+					log.Fatal("写server失败", err)
+					return
+				}
+			} else {
+				var tragetedInfo dto.TargetedInfo
+				proxy.acceptID = pg.AcceptID
+				err := json.Unmarshal(pg.Data, &tragetedInfo)
+				if err != nil {
+					err = proxy.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+				} else {
+					err = proxy.Write([]byte{0x05, 0x00, 0x00, tragetedInfo.AType, 0, 0, 0, 0, 0, 0})
+				}
+				if err != nil {
+					proxy.Close()
+					pg.Type = dp.TypeCloseConn
+					pg.Direction = dp.DirectionC2PNoReplay
+					err := a.Write(pg)
+					if err != nil {
+						log.Fatal("写server失败", err)
+						return
+					}
+				}
+			}
+
+		case dp.TypeData:
+			proxy, ok := ProxyPoolInstance.Get(pg.ProxyID)
+			if !ok {
+				// 找不到proxy，通知pointer断连
+				pg.Type = dp.TypeCloseConn
+				pg.Direction = dp.DirectionC2PNoReplay
+				err := a.Write(pg)
+				if err != nil {
+					log.Fatal("写server失败", err)
+					return
+				}
+			}
+			err := proxy.Write(pg.Data)
+			if err != nil {
+				proxy.Close()
+				pg.Type = dp.TypeCloseConn
+				pg.Direction = dp.DirectionC2PNoReplay
+				err := a.Write(pg)
+				if err != nil {
+					log.Fatal("写server失败", err)
+					return
+				}
+			}
+
+		case dp.TypeCloseConn:
+			proxy, ok := ProxyPoolInstance.Get(pg.ProxyID)
+			if ok {
+				proxy.Close()
+			}
+
+		case dp.TypeProxyFail:
+			proxy, ok := ProxyPoolInstance.Get(pg.ProxyID)
+			if ok {
+				proxy.Close()
+			}
+
+		default:
+			log.Fatal("该类型未定义处理方法", pg.Type)
+		}
 	}
 }

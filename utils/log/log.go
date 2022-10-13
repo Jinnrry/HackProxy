@@ -2,6 +2,7 @@ package log
 
 import (
 	"fmt"
+	"github.com/Jinnrry/gop"
 	"runtime"
 	"time"
 )
@@ -58,6 +59,7 @@ func Debug(v ...any) {
 	_, filename, line, _ = runtime.Caller(1)
 	if instance.Level <= level {
 		fmt.Printf("[%s][%s][%s:%d]:%s\n", levelNames[level], time.Now().Format("2006-01-02 15:04:05"), filename, line, fmt.Sprint(v...))
+		gop.Print(v...)
 	}
 }
 

@@ -1,13 +1,16 @@
 package worker
 
 import (
+	"HackProxy/utils/dto"
+	"HackProxy/utils/log"
 	"sync"
 )
 
 type PointerPool struct {
-	Pool      sync.Map
-	PointerID uint32
-	Lock      sync.Mutex
+	Pool        sync.Map
+	PointerList []*dto.PointerInfo
+	PointerID   uint32
+	Lock        sync.Mutex
 }
 
 type ClientPool struct {
@@ -39,6 +42,24 @@ func (p *PointerPool) GenPointerID() uint32 {
 
 func (p *PointerPool) Insert(pointer *Pointer) {
 	p.Pool.Store(pointer.PointerID, pointer)
+	p.PointerList = append(p.PointerList, &dto.PointerInfo{
+		ID: pointer.PointerID,
+		IP: pointer.RemoteIP,
+	})
+
+	// 向所有client推送pointer信息
+	ClientPoolInstance.Pool.Range(func(key, value any) bool {
+		go func() {
+			err := value.(*Client).PushPointerInfo()
+			if err != nil {
+				log.Error("推送pointer信息失败，断开连接", err)
+				value.(*Client).Close()
+			}
+
+		}()
+		return true
+	})
+
 }
 
 func (p *ClientPool) GenClientID() uint32 {
@@ -51,9 +72,29 @@ func (p *ClientPool) GenClientID() uint32 {
 		}
 		p.ClientID++
 	}
-
 }
 
 func (p *ClientPool) Insert(client *Client) {
 	p.Pool.Store(client.ClientID, client)
+}
+
+func (p *ClientPool) Get(clientID uint32) (*Client, bool) {
+	v, ok := p.Pool.Load(clientID)
+	if ok {
+		return v.(*Client), ok
+	}
+	return nil, false
+}
+
+func (p *PointerPool) GetPointerList() []*dto.PointerInfo {
+	return p.PointerList
+}
+
+func (p *PointerPool) Get(pointerID uint32) (*Pointer, bool) {
+	v, ok := p.Pool.Load(pointerID)
+	if ok {
+		return v.(*Pointer), ok
+
+	}
+	return nil, false
 }

@@ -3,7 +3,9 @@ package worker
 import (
 	"HackProxy/config"
 	"HackProxy/utils/dp"
+	"HackProxy/utils/dto"
 	"HackProxy/utils/log"
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	"net/url"
 	"sync"
@@ -32,7 +34,7 @@ func (p *Proxy) Start() {
 		return
 	}
 	// 写入权鉴数据
-	authPkg := dp.NewPackage(dp.DirectionP2S, dp.TypeAuth, 0, 0, 0, []byte(config.Pointer2ServerAuth))
+	authPkg := dp.NewPackage(dp.DirectionP2S, dp.TypeAuth, 0, 0, 0, 0, []byte(config.Pointer2ServerAuth))
 	err = c.WriteMessage(websocket.BinaryMessage, authPkg.Encode())
 	if err != nil {
 		log.Fatal("发送权鉴包失败", err)
@@ -68,6 +70,73 @@ func (p *Proxy) StartRead() {
 			log.Error("读取server数据失败", err)
 			return
 		}
-		log.Debug("收到服务端数据", pg)
+
+		switch pg.Type {
+		case dp.TypeCreateConn:
+			var tragetInfo *dto.TargetedInfo
+			err := json.Unmarshal(pg.Data, &tragetInfo)
+			if err != nil {
+				pg.Type = dp.TypeCreateConnFail
+				pg.Direction = dp.DirectionP2C
+				err := p.Write(pg)
+				if err != nil {
+					log.Debug("pointer写向server失败", err)
+					return
+				}
+			}
+			acceptID, err2 := NewAccept(tragetInfo, pg.ClientID, pg.ProxyID)
+			if err2 != nil {
+				pg.Type = dp.TypeCreateConnFail
+				pg.Direction = dp.DirectionP2C
+				pg.Data = []byte(err2.Error())
+				err3 := p.Write(pg)
+				if err3 != nil {
+					log.Debug("pointer写向server失败", err3)
+					return
+				}
+			} else {
+				pg.Type = dp.TypeCreateConnSucc
+				pg.Direction = dp.DirectionP2C
+				pg.AcceptID = acceptID
+				err4 := p.Write(pg)
+				if err4 != nil {
+					log.Debug("pointer写向server失败", err4)
+					return
+				}
+			}
+
+		case dp.TypeData:
+			accept, ok := AcceptPoolInstance.Get(pg.AcceptID)
+			if !ok {
+				pg.Type = dp.TypeProxyFail
+				pg.Direction = dp.DirectionP2CNoReplay
+				pg.Data = nil
+				err3 := p.Write(pg)
+				if err3 != nil {
+					log.Debug("pointer写向server失败", err3)
+					return
+				}
+			}
+			err := accept.Write(pg.Data)
+			if err != nil {
+				pg.Type = dp.TypeProxyFail
+				pg.Direction = dp.DirectionP2CNoReplay
+				pg.Data = []byte(err.Error())
+				err3 := p.Write(pg)
+				if err3 != nil {
+					log.Debug("pointer写向server失败", err3)
+					return
+				}
+			}
+
+		case dp.TypeCloseConn:
+			accept, ok := AcceptPoolInstance.Get(pg.AcceptID)
+			if ok {
+				accept.Close()
+			}
+
+		default:
+			log.Fatal("该类型未定义处理方法", pg.Type)
+		}
 	}
 }
