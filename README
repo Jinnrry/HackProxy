@@ -1,3 +1,0 @@
-[测试方法]
-
-curl -x socks5://127.0.0.1:1080 http://www.baidu.com
