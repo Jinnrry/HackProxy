@@ -36,7 +36,7 @@ func home(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	log.SetLogLevel(log.LevelDebug)
+	log.SetLogLevel(log.LevelInfo)
 
 	http.HandleFunc("/pointer", pointerHandler)
 	http.HandleFunc("/client", clientHandler)

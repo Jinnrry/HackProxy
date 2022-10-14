@@ -37,6 +37,9 @@ func (p *AcceptPool) Remove(acceptID uint64) {
 func (p *AcceptPool) Get(acceptID uint64) (*Accept, bool) {
 	v, ok := p.Pool.Load(acceptID)
 	if ok {
+		if v == nil {
+			return nil, false
+		}
 		return v.(*Accept), ok
 	}
 	return nil, false

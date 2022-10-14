@@ -4,6 +4,7 @@ import (
 	"HackProxy/utils"
 	"HackProxy/utils/log"
 	"fmt"
+	"unicode/utf8"
 )
 
 const (
@@ -114,21 +115,21 @@ func (p *Package) Debug() {
 		TypeData:           "数据包",
 	}
 
-	//if p.Type == TypeData {
-	//
-	//	fmt.Printf("方向：%s,类型:%s,PointerID:%d,ClientID:%d,AcceptID:%d,ProxyID:%d \n",
-	//		DirMap[p.Direction], TypeMap[p.Type], p.PointerID, p.ClientID, p.AcceptID, p.ProxyID,
-	//	)
-	//} else {
-	//	if utf8.ValidString(string(p.Data)) {
-	fmt.Printf("方向：%s,类型:%s,PointerID:%d,ClientID:%d,AcceptID:%d,ProxyID:%d,Data:%s \n",
-		DirMap[p.Direction], TypeMap[p.Type], p.PointerID, p.ClientID, p.AcceptID, p.ProxyID, string(p.Data),
-	)
-	//} else {
-	//	fmt.Printf("方向：%s,类型:%s,PointerID:%d,ClientID:%d,AcceptID:%d,ProxyID:%d \n",
-	//		DirMap[p.Direction], TypeMap[p.Type], p.PointerID, p.ClientID, p.AcceptID, p.ProxyID,
-	//	)
-	//}
-	//}
+	if p.Type == TypeData {
+
+		fmt.Printf("方向：%s,类型:%s,PointerID:%d,ClientID:%d,AcceptID:%d,ProxyID:%d \n",
+			DirMap[p.Direction], TypeMap[p.Type], p.PointerID, p.ClientID, p.AcceptID, p.ProxyID,
+		)
+	} else {
+		if utf8.ValidString(string(p.Data)) {
+			fmt.Printf("方向：%s,类型:%s,PointerID:%d,ClientID:%d,AcceptID:%d,ProxyID:%d,Data:%s \n",
+				DirMap[p.Direction], TypeMap[p.Type], p.PointerID, p.ClientID, p.AcceptID, p.ProxyID, string(p.Data),
+			)
+		} else {
+			fmt.Printf("方向：%s,类型:%s,PointerID:%d,ClientID:%d,AcceptID:%d,ProxyID:%d \n",
+				DirMap[p.Direction], TypeMap[p.Type], p.PointerID, p.ClientID, p.AcceptID, p.ProxyID,
+			)
+		}
+	}
 
 }

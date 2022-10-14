@@ -4,8 +4,8 @@ import (
 	"HackProxy/utils/dp"
 	"HackProxy/utils/dto"
 	"HackProxy/utils/log"
+	"errors"
 	"fmt"
-	"io"
 	"net"
 )
 
@@ -46,6 +46,16 @@ func (p *Accept) Close() {
 }
 
 func (p *Accept) Write(data []byte) error {
+	if p == nil {
+		log.Error("指针为空")
+		return errors.New("connect err")
+	}
+
+	if p.conn == nil {
+		log.Error("连接为空")
+		return errors.New("connect err")
+	}
+
 	_, err := p.conn.Write(data)
 
 	return err
@@ -58,7 +68,7 @@ func (p *Accept) StartRead() {
 			size := 32 * 1024
 			buf := make([]byte, size)
 			n, err := p.conn.Read(buf)
-			if err != nil && err != io.EOF {
+			if err != nil {
 				// 通知client断连
 				err := ProxyIntance.Write(dp.NewPackage(dp.DirectionP2CNoReplay, dp.TypeCloseConn, ProxyIntance.PointerID, p.ClientID, p.ID, p.ProxyID, []byte(err.Error())))
 				if err != nil {

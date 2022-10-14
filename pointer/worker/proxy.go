@@ -119,16 +119,17 @@ func (p *Proxy) StartRead() {
 						log.Debug("pointer写向server失败", err3)
 						return
 					}
-				}
-				err := accept.Write(pg.Data)
-				if err != nil {
-					pg.Type = dp.TypeProxyFail
-					pg.Direction = dp.DirectionP2CNoReplay
-					pg.Data = []byte(err.Error())
-					err3 := p.Write(pg)
-					if err3 != nil {
-						log.Debug("pointer写向server失败", err3)
-						return
+				} else {
+					err := accept.Write(pg.Data)
+					if err != nil {
+						pg.Type = dp.TypeProxyFail
+						pg.Direction = dp.DirectionP2CNoReplay
+						pg.Data = []byte(err.Error())
+						err3 := p.Write(pg)
+						if err3 != nil {
+							log.Debug("pointer写向server失败", err3)
+							return
+						}
 					}
 				}
 

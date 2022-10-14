@@ -5,7 +5,6 @@ import (
 	"HackProxy/utils/dto"
 	"HackProxy/utils/log"
 	"encoding/json"
-	"io"
 	"net"
 	"sync"
 )
@@ -76,7 +75,7 @@ func (p *Proxy) StartRead() {
 		size := 32 * 1024
 		buf := make([]byte, size)
 		n, err := p.conn.Read(buf)
-		if err != nil && err != io.EOF {
+		if err != nil {
 			p.Close()
 			// ss断连，通知pointer断连
 			err := AcceptInstance.Write(dp.NewPackage(dp.DirectionC2PNoReplay, dp.TypeCloseConn, p.pointerID, AcceptInstance.ClientID, p.acceptID, p.ID, nil))

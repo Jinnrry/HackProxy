@@ -15,7 +15,7 @@ import (
 
 func main() {
 
-	log.SetLogLevel(log.LevelDebug)
+	log.SetLogLevel(log.LevelInfo)
 
 	var ss5prot string
 	flag.StringVar(&ss5prot, "p", "1080", "-p 设置ss5代理端口")
