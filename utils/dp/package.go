@@ -1,6 +1,10 @@
 package dp
 
-import "HackProxy/utils"
+import (
+	"HackProxy/utils"
+	"HackProxy/utils/log"
+	"fmt"
+)
 
 const (
 	DirectionC2P = 1
@@ -77,4 +81,54 @@ func DecodePackage(data []byte) *Package {
 	}
 
 	return ret
+}
+
+func (p *Package) Debug() {
+	if log.GetLogLevel() != log.LevelDebug {
+		return
+	}
+
+	DirMap := map[uint8]string{
+		DirectionC2P:         "c2p",
+		DirectionP2C:         "p2c",
+		DirectionC2S:         "c2s",
+		DirectionP2S:         "p2s",
+		DirectionS2P:         "s2p",
+		DirectionS2C:         "s2c",
+		DirectionC2PNoReplay: "C2PNoReplay",
+		DirectionP2CNoReplay: "P2CNoReplay",
+		DirectionC2SNoReplay: "C2SNoReplay",
+		DirectionP2SNoReplay: "P2SNoReplay",
+		DirectionS2PNoReplay: "S2PNoReplay",
+		DirectionS2CNoReplay: "S2CNoReplay",
+	}
+
+	TypeMap := map[uint8]string{
+		TypeAuth:           "权鉴",
+		TypePointerInfo:    "Pointer信息",
+		TypeCreateConn:     "创建连接",
+		TypeCreateConnFail: "建连失败",
+		TypeCreateConnSucc: "建连成功",
+		TypeProxyFail:      "代理失败",
+		TypeCloseConn:      "关闭连接",
+		TypeData:           "数据包",
+	}
+
+	//if p.Type == TypeData {
+	//
+	//	fmt.Printf("方向：%s,类型:%s,PointerID:%d,ClientID:%d,AcceptID:%d,ProxyID:%d \n",
+	//		DirMap[p.Direction], TypeMap[p.Type], p.PointerID, p.ClientID, p.AcceptID, p.ProxyID,
+	//	)
+	//} else {
+	//	if utf8.ValidString(string(p.Data)) {
+	fmt.Printf("方向：%s,类型:%s,PointerID:%d,ClientID:%d,AcceptID:%d,ProxyID:%d,Data:%s \n",
+		DirMap[p.Direction], TypeMap[p.Type], p.PointerID, p.ClientID, p.AcceptID, p.ProxyID, string(p.Data),
+	)
+	//} else {
+	//	fmt.Printf("方向：%s,类型:%s,PointerID:%d,ClientID:%d,AcceptID:%d,ProxyID:%d \n",
+	//		DirMap[p.Direction], TypeMap[p.Type], p.PointerID, p.ClientID, p.AcceptID, p.ProxyID,
+	//	)
+	//}
+	//}
+
 }

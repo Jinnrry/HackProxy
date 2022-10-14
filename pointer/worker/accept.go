@@ -5,6 +5,7 @@ import (
 	"HackProxy/utils/dto"
 	"HackProxy/utils/log"
 	"fmt"
+	"io"
 	"net"
 )
 
@@ -57,7 +58,7 @@ func (p *Accept) StartRead() {
 			size := 32 * 1024
 			buf := make([]byte, size)
 			n, err := p.conn.Read(buf)
-			if err != nil {
+			if err != nil && err != io.EOF {
 				// 通知client断连
 				err := ProxyIntance.Write(dp.NewPackage(dp.DirectionP2CNoReplay, dp.TypeCloseConn, ProxyIntance.PointerID, p.ClientID, p.ID, p.ProxyID, []byte(err.Error())))
 				if err != nil {

@@ -2,7 +2,6 @@ package log
 
 import (
 	"fmt"
-	"github.com/Jinnrry/gop"
 	"runtime"
 	"time"
 )
@@ -42,6 +41,10 @@ func SetLogLevel(level LogLevel) {
 	instance.Level = level
 }
 
+func GetLogLevel() LogLevel {
+	return instance.Level
+}
+
 func Trace(v ...any) {
 	level := LevelTrace
 
@@ -54,12 +57,10 @@ func Trace(v ...any) {
 
 func Debug(v ...any) {
 	level := LevelDebug
-
 	filename, line := "???", 0
 	_, filename, line, _ = runtime.Caller(1)
 	if instance.Level <= level {
 		fmt.Printf("[%s][%s][%s:%d]:%s\n", levelNames[level], time.Now().Format("2006-01-02 15:04:05"), filename, line, fmt.Sprint(v...))
-		gop.Print(v...)
 	}
 }
 

@@ -59,6 +59,7 @@ func (a *Accept) Start() {
 func (a *Accept) Write(pg *dp.Package) error {
 	a.Lock.Lock()
 	defer a.Lock.Unlock()
+	pg.Debug()
 	return a.conn.WriteMessage(websocket.BinaryMessage, pg.Encode())
 }
 
@@ -69,6 +70,7 @@ func (a *Accept) StartRead() {
 			log.Error("读取server数据失败", err)
 			return
 		}
+		pg.Debug()
 		switch pg.Type {
 		case dp.TypePointerInfo:
 			_ = json.Unmarshal(pg.Data, &a.PointerInfoList)
@@ -109,24 +111,27 @@ func (a *Accept) StartRead() {
 				// 找不到proxy，通知pointer断连
 				pg.Type = dp.TypeCloseConn
 				pg.Direction = dp.DirectionC2PNoReplay
+				log.Error("代理失败，找不到proxy")
 				err := a.Write(pg)
 				if err != nil {
 					log.Fatal("写server失败", err)
 					return
 				}
-			}
-			err := proxy.Write(pg.Data)
-			if err != nil {
-				proxy.Close()
-				pg.Type = dp.TypeCloseConn
-				pg.Direction = dp.DirectionC2PNoReplay
-				err := a.Write(pg)
+			} else {
+				err := proxy.Write(pg.Data)
 				if err != nil {
-					log.Fatal("写server失败", err)
-					return
+					proxy.Close()
+					pg.Type = dp.TypeCloseConn
+					pg.Direction = dp.DirectionC2PNoReplay
+					err := a.Write(pg)
+					if err != nil {
+						log.Fatal("写ss5失败", err)
+						return
+					}
+				} else {
+					log.Debug("写ss5成功")
 				}
 			}
-
 		case dp.TypeCloseConn:
 			proxy, ok := ProxyPoolInstance.Get(pg.ProxyID)
 			if ok {
@@ -134,6 +139,12 @@ func (a *Accept) StartRead() {
 			}
 
 		case dp.TypeProxyFail:
+			proxy, ok := ProxyPoolInstance.Get(pg.ProxyID)
+			if ok {
+				proxy.Close()
+			}
+
+		case dp.TypeCreateConnFail:
 			proxy, ok := ProxyPoolInstance.Get(pg.ProxyID)
 			if ok {
 				proxy.Close()

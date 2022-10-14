@@ -60,6 +60,7 @@ func (p *Proxy) Start() {
 func (p *Proxy) Write(pg *dp.Package) error {
 	p.Lock.Lock()
 	defer p.Lock.Unlock()
+	pg.Debug()
 	return p.conn.WriteMessage(websocket.BinaryMessage, pg.Encode())
 }
 
@@ -70,73 +71,77 @@ func (p *Proxy) StartRead() {
 			log.Error("读取server数据失败", err)
 			return
 		}
+		pg.Debug()
 
-		switch pg.Type {
-		case dp.TypeCreateConn:
-			var tragetInfo *dto.TargetedInfo
-			err := json.Unmarshal(pg.Data, &tragetInfo)
-			if err != nil {
-				pg.Type = dp.TypeCreateConnFail
-				pg.Direction = dp.DirectionP2C
-				err := p.Write(pg)
+		go func() {
+			switch pg.Type {
+			case dp.TypeCreateConn:
+				var tragetInfo *dto.TargetedInfo
+				err := json.Unmarshal(pg.Data, &tragetInfo)
 				if err != nil {
-					log.Debug("pointer写向server失败", err)
-					return
+					pg.Type = dp.TypeCreateConnFail
+					pg.Direction = dp.DirectionP2C
+					err := p.Write(pg)
+					if err != nil {
+						log.Debug("pointer写向server失败", err)
+						return
+					}
 				}
-			}
-			acceptID, err2 := NewAccept(tragetInfo, pg.ClientID, pg.ProxyID)
-			if err2 != nil {
-				pg.Type = dp.TypeCreateConnFail
-				pg.Direction = dp.DirectionP2C
-				pg.Data = []byte(err2.Error())
-				err3 := p.Write(pg)
-				if err3 != nil {
-					log.Debug("pointer写向server失败", err3)
-					return
+				acceptID, err2 := NewAccept(tragetInfo, pg.ClientID, pg.ProxyID)
+				if err2 != nil {
+					pg.Type = dp.TypeCreateConnFail
+					pg.Direction = dp.DirectionP2C
+					pg.Data = []byte(err2.Error())
+					err3 := p.Write(pg)
+					if err3 != nil {
+						log.Debug("pointer写向server失败", err3)
+						return
+					}
+				} else {
+					pg.Type = dp.TypeCreateConnSucc
+					pg.Direction = dp.DirectionP2C
+					pg.AcceptID = acceptID
+					err4 := p.Write(pg)
+					if err4 != nil {
+						log.Debug("pointer写向server失败", err4)
+						return
+					}
 				}
-			} else {
-				pg.Type = dp.TypeCreateConnSucc
-				pg.Direction = dp.DirectionP2C
-				pg.AcceptID = acceptID
-				err4 := p.Write(pg)
-				if err4 != nil {
-					log.Debug("pointer写向server失败", err4)
-					return
-				}
-			}
 
-		case dp.TypeData:
-			accept, ok := AcceptPoolInstance.Get(pg.AcceptID)
-			if !ok {
-				pg.Type = dp.TypeProxyFail
-				pg.Direction = dp.DirectionP2CNoReplay
-				pg.Data = nil
-				err3 := p.Write(pg)
-				if err3 != nil {
-					log.Debug("pointer写向server失败", err3)
-					return
+			case dp.TypeData:
+				accept, ok := AcceptPoolInstance.Get(pg.AcceptID)
+				if !ok {
+					pg.Type = dp.TypeProxyFail
+					pg.Direction = dp.DirectionP2CNoReplay
+					pg.Data = nil
+					err3 := p.Write(pg)
+					if err3 != nil {
+						log.Debug("pointer写向server失败", err3)
+						return
+					}
 				}
-			}
-			err := accept.Write(pg.Data)
-			if err != nil {
-				pg.Type = dp.TypeProxyFail
-				pg.Direction = dp.DirectionP2CNoReplay
-				pg.Data = []byte(err.Error())
-				err3 := p.Write(pg)
-				if err3 != nil {
-					log.Debug("pointer写向server失败", err3)
-					return
+				err := accept.Write(pg.Data)
+				if err != nil {
+					pg.Type = dp.TypeProxyFail
+					pg.Direction = dp.DirectionP2CNoReplay
+					pg.Data = []byte(err.Error())
+					err3 := p.Write(pg)
+					if err3 != nil {
+						log.Debug("pointer写向server失败", err3)
+						return
+					}
 				}
-			}
 
-		case dp.TypeCloseConn:
-			accept, ok := AcceptPoolInstance.Get(pg.AcceptID)
-			if ok {
-				accept.Close()
-			}
+			case dp.TypeCloseConn:
+				accept, ok := AcceptPoolInstance.Get(pg.AcceptID)
+				if ok {
+					accept.Close()
+				}
 
-		default:
-			log.Fatal("该类型未定义处理方法", pg.Type)
-		}
+			default:
+				log.Fatal("该类型未定义处理方法", pg.Type)
+			}
+		}()
+
 	}
 }

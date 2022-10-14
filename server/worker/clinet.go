@@ -89,7 +89,7 @@ func NewClient(conn *websocket.Conn) {
 func (p *Client) Write(pg *dp.Package) error {
 	p.Lock.Lock()
 	defer p.Lock.Unlock()
-
+	pg.Debug()
 	return p.WebSocketConn.WriteMessage(websocket.BinaryMessage, pg.Encode())
 }
 
@@ -116,12 +116,13 @@ func (p *Client) StartRead() {
 				p.Close()
 				return
 			}
-
+			pg.Debug()
 			if pg.Direction == dp.DirectionC2P {
 				pointer, ok := PointerPoolInstance.Get(pg.PointerID)
 				if !ok {
 					pg.Type = dp.TypeProxyFail
 					pg.Direction = dp.DirectionS2C
+					log.Error("代理失败，找pointer失败", pg.PointerID)
 					err := p.Write(pg)
 					if err != nil {
 						p.Close()
@@ -132,6 +133,7 @@ func (p *Client) StartRead() {
 						pointer.Close()
 						pg.Type = dp.TypeProxyFail
 						pg.Direction = dp.DirectionS2C
+						log.Error("代理失败，写pointer失败", pg.PointerID)
 						err := p.Write(pg)
 						if err != nil {
 							p.Close()
@@ -146,7 +148,6 @@ func (p *Client) StartRead() {
 						pointer.Close()
 					}
 				}
-
 			}
 		}
 	}
