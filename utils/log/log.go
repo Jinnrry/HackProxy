@@ -15,6 +15,7 @@ const (
 	LevelWarn
 	LevelError
 	LevelFatal
+	LevelNone
 )
 
 var levelNames = []string{
@@ -24,6 +25,7 @@ var levelNames = []string{
 	LevelWarn:  "Warn",
 	LevelError: "Error",
 	LevelFatal: "Fatal",
+	LevelNone:  "None",
 }
 
 type HackLog struct {
@@ -59,6 +61,8 @@ func Debug(v ...any) {
 	level := LevelDebug
 	filename, line := "???", 0
 	_, filename, line, _ = runtime.Caller(1)
+	i := instance
+	_ = i
 	if instance.Level <= level {
 		fmt.Printf("[%s][%s][%s:%d]:%s\n", levelNames[level], time.Now().Format("2006-01-02 15:04:05"), filename, line, fmt.Sprint(v...))
 	}

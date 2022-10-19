@@ -2,6 +2,7 @@ package main
 
 import (
 	"HackProxy/client/worker"
+	"HackProxy/config"
 	"HackProxy/utils/dto"
 	"HackProxy/utils/log"
 	"encoding/binary"
@@ -10,15 +11,66 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"time"
 )
 
+func showStatus(w http.ResponseWriter, r *http.Request) {
+	info := `
+<html>
+<body>
+<h3>Client Status</h3>
+Accept Info:<br>
+<table>
+<tr><td>ProxyID</td><td>PointerID</td><td>AcceptID</td><td>TargetAddress</td></tr>
+`
+	worker.ProxyPoolInstance.Pool.Range(func(key, value any) bool {
+		info += fmt.Sprintf("<tr><td>%d</td><td>%d</td><td>%d</td><td>%s</td></tr>", value.(*worker.Proxy).ID, value.(*worker.Proxy).PointerID, value.(*worker.Proxy).AcceptID, value.(*worker.Proxy).TargetAddress)
+		return true
+	})
+	info += `
+</table>
+</body>
+</html>
+`
+
+	w.Write([]byte(info))
+}
+
 func main() {
 
-	log.SetLogLevel(log.LevelInfo)
-
 	var ss5prot string
+
 	flag.StringVar(&ss5prot, "p", "1080", "-p 设置ss5代理端口")
+	var logLevel string
+	flag.StringVar(&logLevel, "l", "none", "-l 设置日志级别")
+	flag.Parse()
+
+	switch logLevel {
+	case "Trace":
+		log.SetLogLevel(log.LevelTrace)
+	case "Debug":
+		log.SetLogLevel(log.LevelDebug)
+	case "Info":
+		log.SetLogLevel(log.LevelInfo)
+	case "Warn":
+		log.SetLogLevel(log.LevelWarn)
+	case "Error":
+		log.SetLogLevel(log.LevelError)
+	case "Fatal":
+		log.SetLogLevel(log.LevelFatal)
+	case "None":
+		log.SetLogLevel(log.LevelNone)
+	}
+
+	if logLevel == "Debug" {
+		go func() {
+			// 开启status展示
+			http.HandleFunc("/status", showStatus)
+			log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.ServerPort+2), nil))
+		}()
+	}
+
 	go func() {
 		for {
 			worker.AcceptInstance = &worker.Accept{}
@@ -53,6 +105,7 @@ func process(conn net.Conn) {
 	}
 
 	targetedInfo, err := getAddress(conn) // 解析出需要连接的地址
+	log.Debug("GET Address:", targetedInfo)
 	if err != nil {
 		log.Debug("connect error:", err)
 		conn.Close()

@@ -11,6 +11,7 @@ type PointerPool struct {
 	PointerList []*dto.PointerInfo
 	PointerID   uint32
 	Lock        sync.Mutex
+	Length      int
 }
 
 type ClientPool struct {
@@ -32,10 +33,11 @@ func (p *PointerPool) GenPointerID() uint32 {
 	defer p.Lock.Unlock()
 
 	for {
+		p.PointerID++
+
 		if _, ok := p.Pool.Load(p.PointerID); !ok {
 			return p.PointerID
 		}
-		p.PointerID++
 	}
 
 }
@@ -60,6 +62,7 @@ func (p *PointerPool) Insert(pointer *Pointer) {
 		return true
 	})
 
+	p.Length++
 }
 
 func (p *ClientPool) GenClientID() uint32 {
@@ -67,10 +70,11 @@ func (p *ClientPool) GenClientID() uint32 {
 	defer p.Lock.Unlock()
 
 	for {
+		p.ClientID++
+
 		if _, ok := p.Pool.Load(p.ClientID); !ok {
 			return p.ClientID
 		}
-		p.ClientID++
 	}
 }
 

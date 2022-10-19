@@ -19,10 +19,11 @@ func (p *ProxyPool) GenProxyID() uint64 {
 	defer p.Lock.Unlock()
 
 	for {
+		p.ProxyID++
 		if _, ok := p.Pool.Load(p.ProxyID); !ok {
 			return p.ProxyID
 		}
-		p.ProxyID++
+
 	}
 }
 

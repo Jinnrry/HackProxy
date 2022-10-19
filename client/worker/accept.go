@@ -86,7 +86,7 @@ func (a *Accept) StartRead() {
 				}
 			} else {
 				var tragetedInfo dto.TargetedInfo
-				proxy.acceptID = pg.AcceptID
+				proxy.AcceptID = pg.AcceptID
 				err := json.Unmarshal(pg.Data, &tragetedInfo)
 				if err != nil {
 					err = proxy.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})

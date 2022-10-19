@@ -19,10 +19,11 @@ func (p *AcceptPool) GenAcceptID() uint64 {
 	defer p.Lock.Unlock()
 
 	for {
+		p.AcceptID++
+
 		if _, ok := p.Pool.Load(p.AcceptID); !ok {
 			return p.AcceptID
 		}
-		p.AcceptID++
 	}
 }
 

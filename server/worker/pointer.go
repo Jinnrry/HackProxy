@@ -120,12 +120,13 @@ func (p *Pointer) StartRead() {
 			if pg.Direction == dp.DirectionP2C {
 				c, ok := ClientPoolInstance.Get(pg.ClientID)
 				if !ok {
-					pg.Type = dp.TypeProxyFail
+					pg.Type = dp.TypeCloseConn
 					log.Error("代理失败，找不到client")
 					err := p.Write(pg)
 					if err != nil {
 						p.Close()
 					}
+					continue
 				}
 				err := c.Write(pg)
 				if err != nil {
